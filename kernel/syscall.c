@@ -6,6 +6,7 @@
 #include "proc.h"
 #include "syscall.h"
 #include "defs.h"
+#include "kernel/sysinfo.h"
 
 // Fetch the uint64 at addr from the current process.
 int
@@ -104,6 +105,8 @@ extern uint64 sys_unlink(void);
 extern uint64 sys_wait(void);
 extern uint64 sys_write(void);
 extern uint64 sys_uptime(void);
+uint64 sys_trace(void);
+uint64 sys_sysinfo(void);
 
 static uint64 (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -127,8 +130,35 @@ static uint64 (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
+[SYS_trace]   sys_trace,
+[SYS_sysinfo] sys_sysinfo
 };
 
+static const char* syscalls_name[] = {
+[SYS_fork]    "fork",
+[SYS_exit]    "exit",
+[SYS_wait]    "wait",
+[SYS_pipe]    "pipe",
+[SYS_read]    "read",
+[SYS_kill]    "kill",
+[SYS_exec]    "exec",
+[SYS_fstat]   "fstat",
+[SYS_chdir]   "chdir",
+[SYS_dup]     "dup",
+[SYS_getpid]  "getpid",
+[SYS_sbrk]    "sbrk",
+[SYS_sleep]   "sleep",
+[SYS_uptime]  "uptime",
+[SYS_open]    "open",
+[SYS_write]   "write",
+[SYS_mknod]   "mknod",
+[SYS_unlink]  "unlink",
+[SYS_link]    "link",
+[SYS_mkdir]   "mkdir",
+[SYS_close]   "close",
+[SYS_trace]   "trace",
+[SYS_sysinfo] "sysinfo"
+};
 void
 syscall(void)
 {
@@ -143,4 +173,40 @@ syscall(void)
             p->pid, p->name, num);
     p->trapframe->a0 = -1;
   }
+  int trace_mask = 1 << num;
+  if ((p->trace_flag & trace_mask) != 0) {
+    printf("%d: syscall %s -> %d\n", 
+           p->pid, syscalls_name[num], p->trapframe->a0);
+  }
 }
+
+uint64 sys_trace(void) {
+    int arg;
+    if (argint(0, &arg) < 0) {
+        return -1;
+    }
+    struct proc* p = myproc();
+    p->trace_flag = arg;
+    return 0;
+}
+
+uint64 sys_sysinfo(void) {
+    
+    struct sysinfo s_info;
+    s_info.nproc = get_proc_num();
+    s_info.freemem = get_free_memory();
+
+    printf("sysinfo: %d - %d\n", s_info.nproc, s_info.freemem);
+
+    uint64 info;
+    argaddr(0, &info);
+    return copyout(myproc()->pagetable, info, (char*)&s_info, sizeof s_info);
+}
+
+
+
+
+
+
+
+
